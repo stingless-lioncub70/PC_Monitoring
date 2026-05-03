@@ -167,7 +167,17 @@ async def broadcast_loop(gpu_index: int | None) -> None:
 async def main() -> None:
     gpu_index = init_gpu()
     try:
-        async with websockets.serve(register, HOST, PORT):
+        try:
+            server = await websockets.serve(register, HOST, PORT)
+        except OSError as exc:
+            # WSAEADDRINUSE (10048) on Windows / EADDRINUSE on POSIX:
+            # another monitor instance is already serving on this port.
+            # Exit cleanly so the new sidecar attempt doesn't error-popup.
+            if getattr(exc, "errno", None) in (10048, 98) or "10048" in str(exc):
+                log.info("Port %d already in use; another monitor instance is serving. Exiting.", PORT)
+                return
+            raise
+        async with server:
             log.info("WebSocket server listening on ws://%s:%d", HOST, PORT)
             await broadcast_loop(gpu_index)
     finally:
@@ -183,3 +193,7 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         log.info("Shutting down")
+    except Exception as exc:
+        # PyInstaller --noconsole shows a popup dialog on unhandled exceptions.
+        # Swallow them so a packaged sidecar exits silently if anything goes wrong.
+        log.exception("Fatal error: %s", exc)
