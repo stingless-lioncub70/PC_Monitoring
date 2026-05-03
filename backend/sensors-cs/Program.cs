@@ -5,13 +5,55 @@
 // Output format (one NDJSON line per second):
 //   {"cpu_temperature": 51.3, "cpu_power": 14.2, "fan_rpm": 2850}
 // All fields may be null if a sensor isn't present.
+//
+// Diagnostic log: %LOCALAPPDATA%\PC Monitor\sensors-debug.log — written once at
+// startup, lists every hardware/sensor LHM found and whether the process is
+// elevated.
 
 using System.Globalization;
+using System.Security.Principal;
 using System.Text.Json;
 using LibreHardwareMonitor.Hardware;
 
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 Console.OutputEncoding = System.Text.Encoding.UTF8;
+
+string? logPath = null;
+StreamWriter? logger = null;
+try
+{
+    var dir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "PC Monitor");
+    Directory.CreateDirectory(dir);
+    logPath = Path.Combine(dir, "sensors-debug.log");
+    logger = new StreamWriter(logPath, append: false) { AutoFlush = true };
+}
+catch
+{
+    // logging is best-effort; continue without it
+}
+
+void Log(string s)
+{
+    try { logger?.WriteLine(s); } catch { }
+}
+
+bool isElevated;
+try
+{
+    using var id = WindowsIdentity.GetCurrent();
+    var principal = new WindowsPrincipal(id);
+    isElevated = principal.IsInRole(WindowsBuiltInRole.Administrator);
+}
+catch { isElevated = false; }
+
+Log($"[{DateTime.Now:O}] sensors.exe starting");
+Log($"  PID: {Environment.ProcessId}");
+Log($"  User: {Environment.UserName}");
+Log($"  Elevated: {isElevated}");
+Log($"  CWD: {Environment.CurrentDirectory}");
+Log($"  ExePath: {Environment.ProcessPath}");
 
 var computer = new Computer
 {
@@ -23,13 +65,44 @@ var computer = new Computer
 try
 {
     computer.Open();
+    Log("Computer.Open() succeeded");
 }
 catch (Exception ex)
 {
+    Log($"Computer.Open() FAILED: {ex.Message}");
     Console.WriteLine(JsonSerializer.Serialize(new { error = ex.Message }));
     Console.Out.Flush();
     return 1;
 }
+
+// First-pass enumeration so we can see what LHM detected
+foreach (var hw in computer.Hardware)
+{
+    hw.Update();
+    foreach (var sub in hw.SubHardware) sub.Update();
+}
+Log("");
+Log("=== Hardware enumeration (initial Update) ===");
+foreach (var hw in computer.Hardware)
+{
+    Log($"HW: {hw.HardwareType} - \"{hw.Name}\"");
+    foreach (var s in hw.Sensors)
+    {
+        var v = s.Value.HasValue ? s.Value.Value.ToString("F2") : "null";
+        Log($"  S: {s.SensorType,-12} \"{s.Name}\" = {v}");
+    }
+    foreach (var sub in hw.SubHardware)
+    {
+        Log($"  SubHW: {sub.HardwareType} - \"{sub.Name}\"");
+        foreach (var s in sub.Sensors)
+        {
+            var v = s.Value.HasValue ? s.Value.Value.ToString("F2") : "null";
+            Log($"    S: {s.SensorType,-12} \"{s.Name}\" = {v}");
+        }
+    }
+}
+Log("=== End enumeration ===");
+Log("");
 
 var ct = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { ct.Cancel(); e.Cancel = true; };
@@ -106,4 +179,5 @@ while (!ct.IsCancellationRequested)
 }
 
 try { computer.Close(); } catch { }
+try { logger?.Dispose(); } catch { }
 return 0;
