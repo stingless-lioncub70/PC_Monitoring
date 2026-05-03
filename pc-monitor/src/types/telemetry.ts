@@ -3,6 +3,11 @@ export interface CpuTelemetry {
   perCore: number[];
   frequencyMhz: number | null;
   temperature: number | null;
+  powerWatts: number | null;
+}
+
+export interface FanTelemetry {
+  rpm: number | null;
 }
 
 export interface MemoryTelemetry {
@@ -37,6 +42,7 @@ export interface Telemetry {
   memory: MemoryTelemetry;
   gpu: GpuTelemetry;
   disk: DiskTelemetry;
+  fans?: FanTelemetry;
 }
 
 export type ConnectionStatus = "connecting" | "open" | "closed" | "error";

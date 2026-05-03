@@ -66,7 +66,11 @@ export function Dashboard() {
             value={cpu?.temperature ?? 0}
             max={100}
             sublabel={
-              cpu?.temperature == null ? "unavailable on Windows" : "k10temp"
+              cpu?.temperature == null
+                ? "run as admin"
+                : cpu.powerWatts != null
+                  ? `${cpu.powerWatts.toFixed(1)} W`
+                  : "k10temp"
             }
             thresholds={TEMP_THRESHOLDS}
           />
@@ -122,7 +126,7 @@ export function Dashboard() {
           />
           <div className="rounded-2xl bg-bg-900/70 border border-white/5 p-5 flex flex-col justify-center">
             <div className="text-xs uppercase tracking-[0.18em] text-slate-400 mb-3">
-              Disk I/O (lifetime)
+              Disk I/O & Fans
             </div>
             <div className="font-mono text-sm text-slate-200 space-y-1">
               <div>
@@ -135,6 +139,14 @@ export function Dashboard() {
                 Write:{" "}
                 <span className="text-accent-green">
                   {disk?.writeMb?.toLocaleString() ?? "—"} MB
+                </span>
+              </div>
+              <div>
+                Fan:{" "}
+                <span className="text-accent-amber">
+                  {data?.fans?.rpm != null
+                    ? `${data.fans.rpm.toLocaleString()} RPM`
+                    : "—"}
                 </span>
               </div>
             </div>

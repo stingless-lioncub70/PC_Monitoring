@@ -1,0 +1,84 @@
+# ============================================================
+# PC_Monitoring — root .gitignore
+# ============================================================
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# --- IDE / editor ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Claude Code harness state ---
+.claude/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# PyInstaller
+backend/build/
+backend/dist/
+backend/*.spec
+
+# Old PowerShell-based LHM helper (replaced by sensors-cs/)
+backend/lib/
+backend/sensors.ps1
+
+# --- Node / Vite / Tauri frontend ---
+node_modules/
+pc-monitor/dist/
+pc-monitor/dist-ssr/
+pc-monitor/.vite/
+pc-monitor/build.log
+
+# Vite / TypeScript caches
+*.tsbuildinfo
+
+# --- Rust / Cargo / Tauri (src-tauri/) ---
+pc-monitor/src-tauri/target/
+pc-monitor/src-tauri/gen/
+
+# --- Tauri sidecar binaries (built artifacts) ---
+# Built locally via `pyinstaller` (monitor.exe) and `dotnet publish` (sensors.exe).
+pc-monitor/src-tauri/binaries/*.exe
+
+# --- .NET / sensors-cs ---
+backend/sensors-cs/bin/
+backend/sensors-cs/obj/
+backend/sensors-cs/publish/
+backend/sensors-cs/build.log
+
+# --- NuGet / package caches ---
+.lhm-pkg/
+*.nupkg
+*.snupkg
+
+# --- Misc build artifacts / scratch ---
+*.log
+.smoketest.py
+.sensors-test.*
+.vsbt-install.log
+
+# --- Local env files ---
+.env
+.env.local
+.env.*.local

@@ -36,7 +36,8 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "binaries/monitor"
+      "binaries/monitor",
+      "binaries/sensors"
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
