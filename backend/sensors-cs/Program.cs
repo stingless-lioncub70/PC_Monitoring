@@ -229,6 +229,50 @@ void ProbeVendorWmi(string vendorLabel, string[] prefixes)
 }
 
 ProbeVendorWmi("Lenovo", new[] { "Lenovo", "LENOVO_" });
+
+// Lenovo-specific: invoke every Get*Temp / Get*CPU / Get*GPU / Get*Power
+// method on LENOVO_GAMEZONE_DATA once at startup so we know what each
+// returns on this BIOS. Read-only by naming convention. The output of this
+// block tells us if any unused method (e.g. GetSystemTemp, GetCardSlotTemp)
+// returns a useful value we should wire into the system-temp ladder.
+Log("");
+Log("=== Lenovo GAMEZONE method probe (one-shot) ===");
+try
+{
+    using var mc = new ManagementClass(@"root\WMI", "LENOVO_GAMEZONE_DATA", null);
+    using var instances = mc.GetInstances();
+    foreach (ManagementObject mo in instances)
+    {
+        foreach (MethodData m in mc.Methods)
+        {
+            var name = m.Name;
+            if (!name.StartsWith("Get", StringComparison.Ordinal)) continue;
+            // Skip methods whose names suggest side effects or non-read intent.
+            if (name.Contains("Set", StringComparison.Ordinal)) continue;
+            // Skip methods we already use elsewhere.
+            // (still log them so we see their values for context)
+            try
+            {
+                using var result = mo.InvokeMethod(name, null, null);
+                if (result == null) { Log($"  {name}() -> null result"); continue; }
+                var props = new List<string>();
+                foreach (PropertyData p in result.Properties)
+                {
+                    object? val;
+                    try { val = p.Value; } catch { val = "<err>"; }
+                    props.Add($"{p.Name}={val}");
+                }
+                Log($"  {name}() -> {{ {string.Join(", ", props)} }}");
+            }
+            catch (Exception ex)
+            {
+                Log($"  {name}() FAILED: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+        break; // only probe the first instance
+    }
+}
+catch (Exception ex) { Log($"  Lenovo method probe FAILED: {ex.Message}"); }
 ProbeVendorWmi("ASUS",   new[] { "ASUS", "Asus", "AsusAtkWmi", "ATK" });
 ProbeVendorWmi("Dell",   new[] { "Dell", "DELL_" });
 ProbeVendorWmi("HP",     new[] { "HP_", "HPQ" });
@@ -596,6 +640,14 @@ double? PollSmbiosTemperatureProbe()
     }
     catch { return null; }
 }
+
+// (System / motherboard temp pollers were removed in v0.3.1. The diagnostic
+//  enumeration of Lenovo GAMEZONE_DATA methods at startup proved that on the
+//  LOQ-class hardware the BIOS doesn't expose any usable system / IR /
+//  ambient sensor — GetIRTemp returns 0, ACPI has only one zone, LHM finds
+//  no Motherboard / SuperIO sensors. The startup probe block is preserved
+//  in this file as a diagnostic in case a future Legion Pro or different
+//  vendor exposes something we should wire up.)
 
 var ct = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { ct.Cancel(); e.Cancel = true; };

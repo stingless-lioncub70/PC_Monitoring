@@ -8,6 +8,7 @@ export interface CircularGaugeProps {
   label: string;
   unit: string;
   sublabel?: string;
+  footer?: string;
   thresholds?: Threshold;
   size?: number;
   strokeWidth?: number;
@@ -33,6 +34,7 @@ export function CircularGauge({
   label,
   unit,
   sublabel,
+  footer,
   thresholds = { warn: 70, critical: 88 },
   size = SIZE_DEFAULT,
   strokeWidth = STROKE_DEFAULT,
@@ -103,6 +105,11 @@ export function CircularGauge({
       <div className="mt-3 text-xs uppercase tracking-[0.18em] text-slate-400">
         {label}
       </div>
+      {footer && (
+        <div className="mt-1 text-[10px] font-mono text-slate-500 text-center">
+          {footer}
+        </div>
+      )}
     </div>
   );
 }

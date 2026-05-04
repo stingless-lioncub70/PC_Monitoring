@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { CircularGauge } from "./CircularGauge";
 import { useHardwareMonitor } from "../hooks/useHardwareMonitor";
 import type { ConnectionStatus } from "../types/telemetry";
@@ -30,8 +31,18 @@ export function Dashboard() {
   const cpu = data?.cpu;
   const mem = data?.memory;
   const gpu = data?.gpu;
-  const disk = data?.disk;
+  const disks = data?.disks ?? [];
   const sys = data?.systemInfo;
+
+  const [appVersion, setAppVersion] = useState<string>("");
+  useEffect(() => {
+    let alive = true;
+    import("@tauri-apps/api/app")
+      .then(m => m.getVersion())
+      .then(v => { if (alive) setAppVersion(v); })
+      .catch(() => { if (alive) setAppVersion("dev"); });
+    return () => { alive = false; };
+  }, []);
 
   const headerLine = sys
     ? [sys.cpu, sys.gpu, sys.storage].filter(Boolean).join(" · ")
@@ -152,40 +163,33 @@ export function Dashboard() {
             }
             thresholds={PERCENT_THRESHOLDS}
           />
-          <CircularGauge
-            label="Disk Used"
-            unit="%"
-            value={disk?.percent ?? 0}
-            sublabel={disk ? `${disk.usedGb} / ${disk.totalGb} GB` : undefined}
-            thresholds={{ warn: 80, critical: 92 }}
-          />
-          <div className="rounded-2xl bg-bg-900/70 border border-white/5 p-5 flex flex-col justify-center">
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-400 mb-3">
-              Disk I/O
-            </div>
-            <div className="font-mono text-sm text-slate-200 space-y-1">
-              <div>
-                Read:{" "}
-                <span className="text-accent-cyan">
-                  {disk?.readMb?.toLocaleString() ?? "—"} MB
-                </span>
-              </div>
-              <div>
-                Write:{" "}
-                <span className="text-accent-green">
-                  {disk?.writeMb?.toLocaleString() ?? "—"} MB
-                </span>
-              </div>
-            </div>
-          </div>
+          {disks.map(d => (
+            <CircularGauge
+              key={d.diskNumber}
+              label={`Disk ${d.diskNumber}${d.driveLetters.length ? ` (${d.driveLetters.join(", ")})` : ""}`}
+              unit="%"
+              value={d.percent}
+              sublabel={`${d.usedGb} / ${d.totalGb} GB · ${d.type}`}
+              footer={
+                d.readMb != null && d.writeMb != null
+                  ? `R ${(d.readMb / 1024).toFixed(1)} GB · W ${(d.writeMb / 1024).toFixed(1)} GB`
+                  : "R — · W —"
+              }
+              thresholds={{ warn: 80, critical: 92 }}
+            />
+          ))}
         </div>
       </section>
 
-      <footer className="mt-10 text-[11px] text-slate-600 font-mono">
-        last update:{" "}
-        {data?.timestamp
-          ? new Date(data.timestamp * 1000).toLocaleTimeString()
-          : "—"}
+      <footer className="mt-10 text-[11px] text-slate-600 font-mono flex items-center gap-3">
+        <span>
+          last update:{" "}
+          {data?.timestamp
+            ? new Date(data.timestamp * 1000).toLocaleTimeString()
+            : "—"}
+        </span>
+        <span className="text-slate-700">·</span>
+        <span>v{appVersion || "…"}</span>
       </footer>
     </div>
   );

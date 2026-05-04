@@ -299,52 +299,98 @@ def detect_cpu_name() -> str:
 _CPU_NAME_FALLBACK: str | None = None
 
 
-def detect_primary_storage_type() -> str:
-    """Run Get-PhysicalDisk once at startup; return 'NVMe' / 'SSD' / 'HDD' / 'Storage'.
+def _format_disk_type(media_type: str, bus_type: str) -> str:
+    """Map (MediaType, BusType) -> friendly label. Examples:
+        ("SSD", "NVMe") -> "NVMe SSD"
+        ("SSD", "SATA") -> "SATA SSD"
+        ("HDD", "SATA") -> "HDD"
+        ("",    "USB")  -> "USB"
+    """
+    bt = (bus_type or "").strip()
+    mt = (media_type or "").strip()
+    if mt == "SSD":
+        return f"{bt} SSD" if bt and bt not in ("SSD",) else "SSD"
+    if mt == "HDD":
+        return f"{bt} HDD" if bt == "USB" else "HDD"
+    if bt:
+        return bt
+    return "Storage"
 
-    PowerShell 5+ ships built-in on Windows 8+. If anything fails (PS missing,
-    blocked by execution policy, json parse fail), we fall back to 'Storage'."""
+
+def detect_disk_topology() -> list[dict[str, Any]]:
+    """Build a per-physical-disk topology by running Get-PhysicalDisk +
+    Get-Partition once at startup, mapping partitions to their parent disk.
+
+    Returns a list ordered by DiskNumber:
+        [{ "diskNumber": 0, "model": "...", "type": "NVMe SSD",
+           "totalBytes": 512000000000, "driveLetters": ["C:"] }, ...]
+
+    Drives without any drive-letter partition (raw / unformatted / system-
+    reserved-only) are still included but with an empty driveLetters list.
+    """
     if os.name != "nt":
-        return "Storage"
+        return [{
+            "diskNumber": 0, "model": "rootfs", "type": "Storage",
+            "totalBytes": 0, "driveLetters": ["/"],
+        }]
     try:
+        ps_cmd = (
+            "$disks = Get-PhysicalDisk | Select-Object DeviceId, FriendlyName, "
+            "MediaType, BusType, Size; "
+            "$parts = Get-Partition | Select-Object DiskNumber, DriveLetter; "
+            "@{disks=$disks; partitions=$parts} | ConvertTo-Json -Compress -Depth 4"
+        )
         result = subprocess.run(
-            [
-                "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
-                "Get-PhysicalDisk | Select-Object MediaType, BusType | ConvertTo-Json -Compress",
-            ],
-            capture_output=True, text=True, timeout=10,
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+            capture_output=True, text=True, timeout=15,
             creationflags=0x08000000,
         )
         if result.returncode != 0 or not result.stdout.strip():
-            return "Storage"
+            return []
         data = json.loads(result.stdout)
-        if isinstance(data, dict):
-            data = [data]
-        # Get-PhysicalDisk surfaces enum values as strings on PS 5+; ints on older.
-        # Prefer NVMe > SSD > HDD across all physical disks.
-        has_nvme = has_ssd = has_hdd = False
-        for d in data:
-            mt = str(d.get("MediaType", "")).strip()
-            bt = str(d.get("BusType", "")).strip()
-            if bt == "NVMe" or bt == "17":
-                has_nvme = True
-            if mt == "SSD" or mt == "4":
-                has_ssd = True
-            elif mt == "HDD" or mt == "3":
-                has_hdd = True
-        if has_nvme:
-            return "NVMe"
-        if has_ssd:
-            return "SSD"
-        if has_hdd:
-            return "HDD"
-        return "Storage"
+        disks_raw = data.get("disks") or []
+        parts_raw = data.get("partitions") or []
+        if isinstance(disks_raw, dict):
+            disks_raw = [disks_raw]
+        if isinstance(parts_raw, dict):
+            parts_raw = [parts_raw]
+
+        # Map disk number -> list of drive letters
+        letters_by_disk: dict[int, list[str]] = {}
+        for p in parts_raw:
+            try:
+                n = int(p.get("DiskNumber"))
+            except (TypeError, ValueError):
+                continue
+            dl = p.get("DriveLetter")
+            if not dl:
+                continue
+            letters_by_disk.setdefault(n, []).append(f"{str(dl)[0]}:")
+
+        topology: list[dict[str, Any]] = []
+        for d in disks_raw:
+            try:
+                n = int(d.get("DeviceId"))
+            except (TypeError, ValueError):
+                continue
+            topology.append({
+                "diskNumber": n,
+                "model": str(d.get("FriendlyName") or "").strip() or "Disk",
+                "type": _format_disk_type(
+                    str(d.get("MediaType") or ""),
+                    str(d.get("BusType") or ""),
+                ),
+                "totalBytes": int(d.get("Size") or 0),
+                "driveLetters": sorted(set(letters_by_disk.get(n, []))),
+            })
+        topology.sort(key=lambda x: x["diskNumber"])
+        return topology
     except Exception as exc:
-        log.debug("Disk type detection failed: %s", exc)
-        return "Storage"
+        log.debug("Disk topology detection failed: %s", exc)
+        return []
 
 
-_PRIMARY_STORAGE_TYPE: str | None = None
+_DISK_TOPOLOGY: list[dict[str, Any]] = []
 
 
 def init_gpu() -> int | None:
@@ -466,41 +512,69 @@ def read_cpu_temperature() -> float | None:
     return None
 
 
-def read_disk() -> dict[str, Any]:
-    """Aggregate usage across every fixed local drive.
+def read_disks() -> list[dict[str, Any]]:
+    """Per-physical-disk usage and I/O. Topology is cached at startup; per-tick
+    data is psutil-fast.
 
-    psutil.disk_usage was previously hard-coded to C:\\, hiding any other
-    SSD/HDD. Now we sum used + total across drives whose mountpoint psutil
-    reports as a fixed local volume (filtered by skipping CDROM and 'cdrom'
-    opts on POSIX). I/O counters are already aggregated across all disks by
-    psutil.disk_io_counters().
+    For each physical disk we sum partition usage across its drive letters,
+    pair with cumulative read/write byte counts from
+    psutil.disk_io_counters(perdisk=True) keyed `PhysicalDriveN`, and surface
+    the cached model/type/total from the topology probe.
     """
-    used_total = 0
-    cap_total = 0
+    if not _DISK_TOPOLOGY:
+        return []
+
+    # Map mountpoint -> disk index (for letters present in topology only)
+    mp_to_disk: dict[str, int] = {}
+    for d in _DISK_TOPOLOGY:
+        for letter in d.get("driveLetters", []):
+            mp_to_disk[f"{letter[0].upper()}:\\"] = d["diskNumber"]
+
+    used_by_disk: dict[int, int] = {}
+    cap_by_disk: dict[int, int] = {}
     if psutil.WINDOWS:
-        partitions = psutil.disk_partitions(all=False)
-        for p in partitions:
+        for p in psutil.disk_partitions(all=False):
             if "cdrom" in p.opts or p.fstype == "":
+                continue
+            n = mp_to_disk.get(p.mountpoint.upper())
+            if n is None:
                 continue
             try:
                 u = psutil.disk_usage(p.mountpoint)
-                used_total += u.used
-                cap_total += u.total
             except (PermissionError, OSError):
                 continue
-    else:
-        u = psutil.disk_usage("/")
-        used_total, cap_total = u.used, u.total
+            used_by_disk[n] = used_by_disk.get(n, 0) + u.used
+            cap_by_disk[n] = cap_by_disk.get(n, 0) + u.total
 
-    pct = round(used_total / cap_total * 100, 1) if cap_total else 0.0
-    io = psutil.disk_io_counters()
-    return {
-        "percent": pct,
-        "usedGb": round(used_total / 1024**3, 1),
-        "totalGb": round(cap_total / 1024**3, 1),
-        "readMb": round(io.read_bytes / 1024**2, 1) if io else None,
-        "writeMb": round(io.write_bytes / 1024**2, 1) if io else None,
-    }
+    # Per-disk I/O byte totals
+    perdisk_io = {}
+    try:
+        perdisk_io = psutil.disk_io_counters(perdisk=True) or {}
+    except Exception:
+        pass
+
+    out: list[dict[str, Any]] = []
+    for d in _DISK_TOPOLOGY:
+        n = d["diskNumber"]
+        used = used_by_disk.get(n, 0)
+        # Fall back to topology size when no partition is mounted (still show
+        # the disk so the user sees it exists).
+        cap = cap_by_disk.get(n) or d.get("totalBytes") or 0
+        pct = round(used / cap * 100, 1) if cap else 0.0
+
+        io = perdisk_io.get(f"PhysicalDrive{n}")
+        out.append({
+            "diskNumber": n,
+            "driveLetters": d.get("driveLetters", []),
+            "model": d.get("model", "Disk"),
+            "type": d.get("type", "Storage"),
+            "percent": pct,
+            "usedGb": round(used / 1024**3, 1),
+            "totalGb": round(cap / 1024**3, 1) if cap else 0.0,
+            "readMb": round(io.read_bytes / 1024**2, 1) if io else None,
+            "writeMb": round(io.write_bytes / 1024**2, 1) if io else None,
+        })
+    return out
 
 
 def build_payload(gpu_index: int | None) -> dict[str, Any]:
@@ -518,12 +592,21 @@ def build_payload(gpu_index: int | None) -> dict[str, Any]:
     # to the registry CPU brand string we cached at startup.
     sensor_cpu = (_sensors_state.get("system_cpu") or "").strip().lstrip("?").strip()
     cpu_name = sensor_cpu or _CPU_NAME_FALLBACK or "Unknown CPU"
+    # Pick the system-drive's type for the header. Disk holding C: is the
+    # natural choice; fall back to the first disk if C: isn't found.
+    system_storage_type = "Storage"
+    if _DISK_TOPOLOGY:
+        sys_disk = next(
+            (d for d in _DISK_TOPOLOGY if any(l.upper() == "C:" for l in d.get("driveLetters", []))),
+            _DISK_TOPOLOGY[0],
+        )
+        system_storage_type = sys_disk.get("type") or "Storage"
     return {
         "timestamp": time.time(),
         "systemInfo": {
             "cpu": cpu_name,
             "gpu": gpu.get("name") if gpu.get("available") else None,
-            "storage": _PRIMARY_STORAGE_TYPE or "Storage",
+            "storage": system_storage_type,
         },
         "cpu": {
             "utilization": cpu_percent,
@@ -539,7 +622,7 @@ def build_payload(gpu_index: int | None) -> dict[str, Any]:
             "totalGb": round(mem.total / 1024**3, 1),
         },
         "gpu": gpu,
-        "disk": read_disk(),
+        "disks": read_disks(),
     }
 
 
@@ -566,11 +649,15 @@ async def broadcast_loop(gpu_index: int | None) -> None:
 
 
 async def main() -> None:
-    global _PRIMARY_STORAGE_TYPE, _CPU_NAME_FALLBACK
+    global _DISK_TOPOLOGY, _CPU_NAME_FALLBACK
     gpu_index = init_gpu()
-    _PRIMARY_STORAGE_TYPE = detect_primary_storage_type()
+    _DISK_TOPOLOGY = detect_disk_topology()
     _CPU_NAME_FALLBACK = detect_cpu_name()
-    log.info("Primary storage type: %s", _PRIMARY_STORAGE_TYPE)
+    log.info("Disk topology: %d disks found", len(_DISK_TOPOLOGY))
+    for d in _DISK_TOPOLOGY:
+        log.info("  Disk %s: %s (%s) %.1f GB letters=%s",
+                 d.get("diskNumber"), d.get("model"), d.get("type"),
+                 (d.get("totalBytes") or 0) / 1024**3, d.get("driveLetters"))
     log.info("CPU name fallback: %s", _CPU_NAME_FALLBACK)
     sensors_task: asyncio.Task | None = None
     try:

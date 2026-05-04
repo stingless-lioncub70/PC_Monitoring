@@ -34,6 +34,10 @@ export interface SystemInfo {
 }
 
 export interface DiskTelemetry {
+  diskNumber: number;
+  driveLetters: string[];
+  model: string;
+  type: string;
   percent: number;
   usedGb: number;
   totalGb: number;
@@ -47,7 +51,7 @@ export interface Telemetry {
   cpu: CpuTelemetry;
   memory: MemoryTelemetry;
   gpu: GpuTelemetry;
-  disk: DiskTelemetry;
+  disks: DiskTelemetry[];
 }
 
 export type ConnectionStatus = "connecting" | "open" | "closed" | "error";
