@@ -3,6 +3,7 @@ export interface CpuTelemetry {
   perCore: number[];
   frequencyMhz: number | null;
   temperature: number | null;
+  temperatureSource: string | null;
   powerWatts: number | null;
 }
 
@@ -19,13 +20,21 @@ export interface MemoryTelemetry {
 export interface GpuTelemetry {
   available: boolean;
   name?: string;
-  utilization?: number;
-  memoryUtilization?: number;
-  memoryUsedMb?: number;
-  memoryTotalMb?: number;
-  temperature?: number;
+  utilization?: number | null;
+  memoryUtilization?: number | null;
+  memoryUsedMb?: number | null;
+  memoryTotalMb?: number | null;
+  temperature?: number | null;
   powerWatts?: number | null;
+  source?: "nvml" | "wddm";
+  integrated?: boolean;
   error?: string;
+}
+
+export interface SystemInfo {
+  cpu: string;
+  gpu: string | null;
+  storage: string;
 }
 
 export interface DiskTelemetry {
@@ -38,6 +47,7 @@ export interface DiskTelemetry {
 
 export interface Telemetry {
   timestamp: number;
+  systemInfo?: SystemInfo;
   cpu: CpuTelemetry;
   memory: MemoryTelemetry;
   gpu: GpuTelemetry;

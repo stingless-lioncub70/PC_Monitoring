@@ -5,6 +5,15 @@ import type { ConnectionStatus } from "../types/telemetry";
 const TEMP_THRESHOLDS = { warn: 75, critical: 88 };
 const PERCENT_THRESHOLDS = { warn: 70, critical: 88 };
 
+const TEMP_SOURCE_LABELS: Record<string, string> = {
+  lhm: "live (MSR)",
+  lenovo: "Lenovo EC",
+  perfcounter: "thermal zone",
+  acpi: "ACPI (cached)",
+  smbios: "SMBIOS probe",
+  psutil: "psutil",
+};
+
 function StatusDot({ status }: { status: ConnectionStatus }) {
   const style = {
     open: "bg-accent-green shadow-[0_0_8px_#10b981]",
@@ -22,6 +31,15 @@ export function Dashboard() {
   const mem = data?.memory;
   const gpu = data?.gpu;
   const disk = data?.disk;
+  const sys = data?.systemInfo;
+
+  const headerLine = sys
+    ? [sys.cpu, sys.gpu, sys.storage].filter(Boolean).join(" · ")
+    : "Detecting hardware…";
+
+  // iGPU: dedicated VRAM is essentially zero, only shared system memory matters.
+  const isIgpu = gpu?.integrated === true;
+  const memoryGaugeLabel = isIgpu ? "GPU Mem" : "VRAM";
 
   return (
     <div className="min-h-screen px-8 py-10">
@@ -30,9 +48,7 @@ export function Dashboard() {
           <h1 className="text-2xl font-semibold tracking-tight text-white">
             PC Monitor
           </h1>
-          <p className="text-sm text-slate-400">
-            Ryzen 7 7435HS · RTX 4050 Laptop · NVMe
-          </p>
+          <p className="text-sm text-slate-400">{headerLine}</p>
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <StatusDot status={status} />
@@ -70,7 +86,9 @@ export function Dashboard() {
                 ? "run as admin"
                 : cpu.powerWatts != null
                   ? `${cpu.powerWatts.toFixed(1)} W`
-                  : "k10temp"
+                  : (cpu.temperatureSource
+                      ? (TEMP_SOURCE_LABELS[cpu.temperatureSource] ?? cpu.temperatureSource)
+                      : "—")
             }
             thresholds={TEMP_THRESHOLDS}
           />
@@ -87,7 +105,11 @@ export function Dashboard() {
             value={gpu?.temperature ?? 0}
             max={100}
             sublabel={
-              gpu?.powerWatts != null ? `${gpu.powerWatts.toFixed(1)} W` : undefined
+              gpu?.temperature == null && isIgpu
+                ? "shared w/ CPU"
+                : gpu?.powerWatts != null
+                  ? `${gpu.powerWatts.toFixed(1)} W`
+                  : undefined
             }
             thresholds={TEMP_THRESHOLDS}
           />
@@ -107,13 +129,26 @@ export function Dashboard() {
             thresholds={PERCENT_THRESHOLDS}
           />
           <CircularGauge
-            label="VRAM"
-            unit="%"
-            value={gpu?.memoryUtilization ?? 0}
+            label={memoryGaugeLabel}
+            unit={gpu?.memoryUtilization != null ? "%" : "GB"}
+            value={
+              gpu?.memoryUtilization != null
+                ? gpu.memoryUtilization
+                : gpu?.memoryUsedMb != null
+                  ? Number((gpu.memoryUsedMb / 1024).toFixed(1))
+                  : 0
+            }
+            max={
+              gpu?.memoryUtilization != null
+                ? 100
+                : (mem?.totalGb ?? 16)
+            }
             sublabel={
               gpu?.memoryUsedMb != null && gpu.memoryTotalMb != null
                 ? `${(gpu.memoryUsedMb / 1024).toFixed(1)} / ${(gpu.memoryTotalMb / 1024).toFixed(1)} GB`
-                : undefined
+                : gpu?.memoryUsedMb != null
+                  ? `${(gpu.memoryUsedMb / 1024).toFixed(1)} GB shared`
+                  : undefined
             }
             thresholds={PERCENT_THRESHOLDS}
           />
