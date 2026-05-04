@@ -49,6 +49,7 @@ export function Dashboard() {
   const [overlayEnabled, setOverlayEnabled] = useState<boolean>(
     () => localStorage.getItem(OVERLAY_STORAGE_KEY) === "true",
   );
+  const [overlayEditing, setOverlayEditing] = useState<boolean>(false);
 
   useEffect(() => {
     invoke("set_overlay_visible", { visible: overlayEnabled }).catch(() => {});
@@ -61,6 +62,18 @@ export function Dashboard() {
     setOverlayEnabled(next);
     localStorage.setItem(OVERLAY_STORAGE_KEY, String(next));
     invoke("set_overlay_visible", { visible: next }).catch(() => {});
+    if (!next && overlayEditing) {
+      // hiding the overlay also exits edit mode
+      setOverlayEditing(false);
+      invoke("set_overlay_interactive", { interactive: false }).catch(() => {});
+    }
+  };
+
+  const toggleOverlayEditing = () => {
+    if (!overlayEnabled) return;
+    const next = !overlayEditing;
+    setOverlayEditing(next);
+    invoke("set_overlay_interactive", { interactive: next }).catch(() => {});
   };
 
   const headerLine = sys
@@ -93,6 +106,28 @@ export function Dashboard() {
             }`}
           >
             Overlay {overlayEnabled ? "On" : "Off"}
+          </button>
+          <button
+            type="button"
+            onClick={toggleOverlayEditing}
+            disabled={!overlayEnabled}
+            aria-pressed={overlayEditing}
+            title={
+              !overlayEnabled
+                ? "Turn the overlay on first"
+                : overlayEditing
+                  ? "Lock overlay (HUD mode)"
+                  : "Drag the overlay or right-click for presets"
+            }
+            className={`font-mono uppercase tracking-wider rounded border px-2 py-1 transition-colors ${
+              !overlayEnabled
+                ? "border-slate-800 text-slate-600 cursor-not-allowed"
+                : overlayEditing
+                  ? "border-accent-amber/60 text-accent-amber bg-accent-amber/10"
+                  : "border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500"
+            }`}
+          >
+            {overlayEditing ? "Editing…" : "Edit Position"}
           </button>
           <div className="flex items-center gap-2">
             <StatusDot status={status} />
