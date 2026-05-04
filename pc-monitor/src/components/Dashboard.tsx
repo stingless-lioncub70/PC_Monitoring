@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { CircularGauge } from "./CircularGauge";
 import { useHardwareMonitor } from "../hooks/useHardwareMonitor";
 import type { ConnectionStatus } from "../types/telemetry";
 
 const TEMP_THRESHOLDS = { warn: 75, critical: 88 };
 const PERCENT_THRESHOLDS = { warn: 70, critical: 88 };
+const OVERLAY_STORAGE_KEY = "pc-monitor-overlay-enabled";
 
 const TEMP_SOURCE_LABELS: Record<string, string> = {
   lhm: "live (MSR)",
@@ -44,6 +46,23 @@ export function Dashboard() {
     return () => { alive = false; };
   }, []);
 
+  const [overlayEnabled, setOverlayEnabled] = useState<boolean>(
+    () => localStorage.getItem(OVERLAY_STORAGE_KEY) === "true",
+  );
+
+  useEffect(() => {
+    invoke("set_overlay_visible", { visible: overlayEnabled }).catch(() => {});
+    // run once on mount to restore persisted state
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const toggleOverlay = () => {
+    const next = !overlayEnabled;
+    setOverlayEnabled(next);
+    localStorage.setItem(OVERLAY_STORAGE_KEY, String(next));
+    invoke("set_overlay_visible", { visible: next }).catch(() => {});
+  };
+
   const headerLine = sys
     ? [sys.cpu, sys.gpu, sys.storage].filter(Boolean).join(" · ")
     : "Detecting hardware…";
@@ -61,9 +80,24 @@ export function Dashboard() {
           </h1>
           <p className="text-sm text-slate-400">{headerLine}</p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <StatusDot status={status} />
-          <span className="font-mono uppercase tracking-wider">{status}</span>
+        <div className="flex items-center gap-3 text-xs text-slate-400">
+          <button
+            type="button"
+            onClick={toggleOverlay}
+            aria-pressed={overlayEnabled}
+            title={overlayEnabled ? "Hide overlay" : "Show overlay"}
+            className={`font-mono uppercase tracking-wider rounded border px-2 py-1 transition-colors ${
+              overlayEnabled
+                ? "border-accent-cyan/60 text-accent-cyan bg-accent-cyan/10"
+                : "border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500"
+            }`}
+          >
+            Overlay {overlayEnabled ? "On" : "Off"}
+          </button>
+          <div className="flex items-center gap-2">
+            <StatusDot status={status} />
+            <span className="font-mono uppercase tracking-wider">{status}</span>
+          </div>
         </div>
       </header>
 

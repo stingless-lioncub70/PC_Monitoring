@@ -26,11 +26,24 @@ fn kill_sidecar_tree(child: CommandChild) {
     }
 }
 
+#[tauri::command]
+fn set_overlay_visible(app: tauri::AppHandle, visible: bool) -> Result<(), String> {
+    if let Some(overlay) = app.get_webview_window("overlay") {
+        if visible {
+            overlay.show().map_err(|e| e.to_string())?;
+        } else {
+            overlay.hide().map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
     .manage(SidecarState(Mutex::new(None)))
+    .invoke_handler(tauri::generate_handler![set_overlay_visible])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -49,6 +62,10 @@ pub fn run() {
 
       let state = app.state::<SidecarState>();
       *state.0.lock().unwrap() = Some(sidecar.1);
+
+      if let Some(overlay) = app.get_webview_window("overlay") {
+        let _ = overlay.set_ignore_cursor_events(true);
+      }
 
       Ok(())
     })

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "PC Monitor by Allain-AFK",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "identifier": "dev.allain-afk.pc-monitor",
   "build": {
     "frontendDist": "../dist",
@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "PC Monitor by Allain-AFK",
         "width": 1100,
         "height": 720,
@@ -19,6 +20,23 @@
         "minHeight": 600,
         "resizable": true,
         "fullscreen": false
+      },
+      {
+        "label": "overlay",
+        "url": "index.html?view=overlay",
+        "title": "PC Monitor Overlay",
+        "width": 280,
+        "height": 180,
+        "x": 16,
+        "y": 16,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focusable": false,
+        "resizable": false,
+        "visible": false,
+        "shadow": false
       }
     ],
     "security": {
