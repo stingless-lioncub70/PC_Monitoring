@@ -46,11 +46,13 @@ export function Overlay() {
     >
       <div>
         <span className="text-accent-cyan">CPU </span>
-        {num(cpu?.utilization, 0)}%  {num(cpu?.temperature, 0)}°C  {num(cpu?.powerWatts, 1)}W
+        {num(cpu?.utilization, 0)}%  {num(cpu?.temperature, 0)}°C
+        {cpu?.powerWatts != null && `  ${cpu.powerWatts.toFixed(1)}W`}
       </div>
       <div>
         <span className="text-accent-cyan">GPU </span>
         {gpuOk ? num(gpu?.utilization, 0) : DASH}%  {gpuOk ? num(gpu?.temperature, 0) : DASH}°C
+        {gpuOk && gpu?.powerWatts != null && `  ${gpu.powerWatts.toFixed(1)}W`}
       </div>
       <div>
         <span className="text-accent-cyan">RAM </span>

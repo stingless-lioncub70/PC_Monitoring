@@ -157,6 +157,7 @@ SENSORS_TTL_SEC = 5.0
 _sensors_state: dict[str, Any] = {
     "cpu_temperature": None,
     "cpu_power": None,
+    "cpu_power_source": None,
     "source": None,
     "updated_at": 0.0,
     # System identity (sensors.exe re-emits the same values every tick)
@@ -227,6 +228,7 @@ async def sensors_subprocess_loop() -> None:
                     continue
                 _sensors_state["cpu_temperature"] = data.get("cpu_temperature")
                 _sensors_state["cpu_power"] = data.get("cpu_power")
+                _sensors_state["cpu_power_source"] = data.get("cpu_power_source")
                 _sensors_state["source"] = data.get("source")
                 _sensors_state["system_cpu"] = data.get("system_cpu") or _sensors_state["system_cpu"]
                 _sensors_state["system_motherboard"] = (
@@ -258,10 +260,16 @@ async def sensors_subprocess_loop() -> None:
 def get_lhm_snapshot() -> dict[str, Any]:
     """Return current LHM-derived values, or null if stale."""
     if time.time() - _sensors_state["updated_at"] > SENSORS_TTL_SEC:
-        return {"cpu_temperature": None, "cpu_power": None, "source": None}
+        return {
+            "cpu_temperature": None,
+            "cpu_power": None,
+            "cpu_power_source": None,
+            "source": None,
+        }
     return {
         "cpu_temperature": _sensors_state["cpu_temperature"],
         "cpu_power": _sensors_state["cpu_power"],
+        "cpu_power_source": _sensors_state["cpu_power_source"],
         "source": _sensors_state["source"],
     }
 
@@ -615,6 +623,7 @@ def build_payload(gpu_index: int | None) -> dict[str, Any]:
             "temperature": cpu_temp,
             "temperatureSource": cpu_temp_source,
             "powerWatts": lhm["cpu_power"],
+            "powerSource": lhm["cpu_power_source"],
         },
         "memory": {
             "percent": mem.percent,

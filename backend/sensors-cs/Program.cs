@@ -641,6 +641,47 @@ double? PollSmbiosTemperatureProbe()
     catch { return null; }
 }
 
+// --- Platform power (Win32_PerfFormattedData_Counters_PowerMeter)
+// ACPI 4.0+ Power Meter exposed via WMI. On laptops this typically reflects
+// either total platform AC consumption or battery discharge depending on
+// power source. Not strictly CPU package power — but a useful "system watts"
+// proxy when WinRing0-blocked machines have no MSR access. Power is in mW.
+bool _platformPowerAvailable = true;
+double? PollPlatformPower()
+{
+    if (!_platformPowerAvailable) return null;
+    try
+    {
+        using var searcher = new ManagementObjectSearcher(
+            @"root\cimv2",
+            "SELECT Name, Power FROM Win32_PerfFormattedData_Counters_PowerMeter");
+        double? best = null;
+        int count = 0, populated = 0;
+        foreach (ManagementObject mo in searcher.Get())
+        {
+            count++;
+            var raw = mo["Power"];
+            if (raw == null) continue;
+            populated++;
+            var mw = Convert.ToDouble(raw, CultureInfo.InvariantCulture);
+            if (mw <= 0) continue;
+            var w = mw / 1000.0;
+            // Sanity filter: laptops 1-200W, desktops 5-1000W
+            if (w < 0.5 || w > 1500) continue;
+            if (best == null || w > best) best = w;
+        }
+        if (count == 0 || populated == 0) _platformPowerAvailable = false;
+        return best.HasValue ? Math.Round(best.Value, 1) : null;
+    }
+    catch (ManagementException mex) when (mex.ErrorCode == ManagementStatus.InvalidClass ||
+                                          mex.ErrorCode == ManagementStatus.NotFound)
+    {
+        _platformPowerAvailable = false;
+        return null;
+    }
+    catch { return null; }
+}
+
 // (System / motherboard temp pollers were removed in v0.3.1. The diagnostic
 //  enumeration of Lenovo GAMEZONE_DATA methods at startup proved that on the
 //  LOQ-class hardware the BIOS doesn't expose any usable system / IR /
@@ -657,6 +698,7 @@ while (!ct.IsCancellationRequested)
     double? cpuTemp = null;
     double? cpuPower = null;
     string source = "none";
+    string powerSource = "none";
 
     if (lhmOk)
     {
@@ -692,7 +734,7 @@ while (!ct.IsCancellationRequested)
                         if (name.Contains("Package", StringComparison.OrdinalIgnoreCase) ||
                             name.Contains("CPU Cores", StringComparison.OrdinalIgnoreCase))
                         {
-                            cpuPower ??= v;
+                            if (cpuPower == null) { cpuPower = v; powerSource = "lhm-package"; }
                         }
                     }
                 }
@@ -745,12 +787,21 @@ while (!ct.IsCancellationRequested)
         }
     }
 
+    // Platform power fallback (ACPI Power Meter; ~system watts, not strictly
+    // CPU package power but useful when WinRing0 is blocked).
+    if (cpuPower == null)
+    {
+        var plat = PollPlatformPower();
+        if (plat.HasValue) { cpuPower = plat.Value; powerSource = "platform"; }
+    }
+
     var wddm = PollWddmGpu();
 
     var payload = new
     {
         cpu_temperature = cpuTemp.HasValue ? Math.Round(cpuTemp.Value, 1) : (double?)null,
         cpu_power = cpuPower.HasValue ? Math.Round(cpuPower.Value, 1) : (double?)null,
+        cpu_power_source = cpuPower.HasValue ? powerSource : null,
         source,
         // Static system identity (same every tick — the receiver caches once)
         system_cpu = cpuName,

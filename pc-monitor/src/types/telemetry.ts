@@ -5,6 +5,7 @@ export interface CpuTelemetry {
   temperature: number | null;
   temperatureSource: string | null;
   powerWatts: number | null;
+  powerSource: string | null;
 }
 
 export interface MemoryTelemetry {

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "PC Monitor by Allain-AFK",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "identifier": "dev.allain-afk.pc-monitor",
   "build": {
     "frontendDist": "../dist",
