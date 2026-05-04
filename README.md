@@ -4,6 +4,7 @@ A lightweight, real-time Windows hardware monitor. Live CPU, GPU, RAM, and disk 
 
 [![Latest release](https://img.shields.io/github/v/release/Allain-afk/PC_Monitoring?display_name=tag)](https://github.com/Allain-afk/PC_Monitoring/releases/latest)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)](https://github.com/Allain-afk/PC_Monitoring/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ---
 
@@ -137,4 +138,6 @@ If something still looks off after checking those, [open an issue](https://githu
 
 ## License
 
-Not yet set. Treat as "all rights reserved" until I add a `LICENSE` file.
+[MIT](LICENSE) © 2026 Allain Legaspi.
+
+This project bundles [LibreHardwareMonitorLib](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor), which is licensed under MPL 2.0. The MIT license covers this project's own source; the bundled LHM binary retains its original MPL-2.0 terms.
