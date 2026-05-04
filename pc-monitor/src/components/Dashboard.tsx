@@ -161,7 +161,7 @@ export function Dashboard() {
           />
           <div className="rounded-2xl bg-bg-900/70 border border-white/5 p-5 flex flex-col justify-center">
             <div className="text-xs uppercase tracking-[0.18em] text-slate-400 mb-3">
-              Disk I/O & Fans
+              Disk I/O
             </div>
             <div className="font-mono text-sm text-slate-200 space-y-1">
               <div>
@@ -174,14 +174,6 @@ export function Dashboard() {
                 Write:{" "}
                 <span className="text-accent-green">
                   {disk?.writeMb?.toLocaleString() ?? "—"} MB
-                </span>
-              </div>
-              <div>
-                Fan:{" "}
-                <span className="text-accent-amber">
-                  {data?.fans?.rpm != null
-                    ? `${data.fans.rpm.toLocaleString()} RPM`
-                    : "—"}
                 </span>
               </div>
             </div>

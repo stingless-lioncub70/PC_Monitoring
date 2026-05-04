@@ -3,7 +3,7 @@ Hardware telemetry WebSocket broadcaster.
 
 - Polls CPU / RAM / Disk via psutil
 - Polls NVIDIA GPU (temp, util, mem, power) via pynvml
-- Spawns sensors.exe (LibreHardwareMonitor wrapper, requires admin) for CPU temp/power/fans
+- Spawns sensors.exe (LibreHardwareMonitor wrapper, requires admin) for CPU temp/power
 - Broadcasts JSON to all connected clients every 1s on ws://localhost:8765
 """
 import asyncio
@@ -157,7 +157,6 @@ SENSORS_TTL_SEC = 5.0
 _sensors_state: dict[str, Any] = {
     "cpu_temperature": None,
     "cpu_power": None,
-    "fan_rpm": None,
     "source": None,
     "updated_at": 0.0,
     # System identity (sensors.exe re-emits the same values every tick)
@@ -228,7 +227,6 @@ async def sensors_subprocess_loop() -> None:
                     continue
                 _sensors_state["cpu_temperature"] = data.get("cpu_temperature")
                 _sensors_state["cpu_power"] = data.get("cpu_power")
-                _sensors_state["fan_rpm"] = data.get("fan_rpm")
                 _sensors_state["source"] = data.get("source")
                 _sensors_state["system_cpu"] = data.get("system_cpu") or _sensors_state["system_cpu"]
                 _sensors_state["system_motherboard"] = (
@@ -260,11 +258,10 @@ async def sensors_subprocess_loop() -> None:
 def get_lhm_snapshot() -> dict[str, Any]:
     """Return current LHM-derived values, or null if stale."""
     if time.time() - _sensors_state["updated_at"] > SENSORS_TTL_SEC:
-        return {"cpu_temperature": None, "cpu_power": None, "fan_rpm": None, "source": None}
+        return {"cpu_temperature": None, "cpu_power": None, "source": None}
     return {
         "cpu_temperature": _sensors_state["cpu_temperature"],
         "cpu_power": _sensors_state["cpu_power"],
-        "fan_rpm": _sensors_state["fan_rpm"],
         "source": _sensors_state["source"],
     }
 
@@ -543,9 +540,6 @@ def build_payload(gpu_index: int | None) -> dict[str, Any]:
         },
         "gpu": gpu,
         "disk": read_disk(),
-        "fans": {
-            "rpm": lhm["fan_rpm"],
-        },
     }
 
 

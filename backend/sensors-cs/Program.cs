@@ -604,7 +604,6 @@ while (!ct.IsCancellationRequested)
 {
     double? cpuTemp = null;
     double? cpuPower = null;
-    int? fanRpm = null;
     string source = "none";
 
     if (lhmOk)
@@ -647,19 +646,6 @@ while (!ct.IsCancellationRequested)
                 }
             }
 
-            IEnumerable<IHardware> walk = new[] { hw }.Concat(hw.SubHardware);
-            foreach (var h in walk)
-            {
-                foreach (var s in h.Sensors)
-                {
-                    if (s.Value == null) continue;
-                    if (s.SensorType == SensorType.Fan && s.Value.Value > 0)
-                    {
-                        var v = (int)s.Value.Value;
-                        if (fanRpm == null || v > fanRpm) fanRpm = v;
-                    }
-                }
-            }
         }
     }
 
@@ -713,7 +699,6 @@ while (!ct.IsCancellationRequested)
     {
         cpu_temperature = cpuTemp.HasValue ? Math.Round(cpuTemp.Value, 1) : (double?)null,
         cpu_power = cpuPower.HasValue ? Math.Round(cpuPower.Value, 1) : (double?)null,
-        fan_rpm = fanRpm,
         source,
         // Static system identity (same every tick — the receiver caches once)
         system_cpu = cpuName,

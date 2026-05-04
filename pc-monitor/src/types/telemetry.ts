@@ -7,10 +7,6 @@ export interface CpuTelemetry {
   powerWatts: number | null;
 }
 
-export interface FanTelemetry {
-  rpm: number | null;
-}
-
 export interface MemoryTelemetry {
   percent: number;
   usedGb: number;
@@ -52,7 +48,6 @@ export interface Telemetry {
   memory: MemoryTelemetry;
   gpu: GpuTelemetry;
   disk: DiskTelemetry;
-  fans?: FanTelemetry;
 }
 
 export type ConnectionStatus = "connecting" | "open" | "closed" | "error";
