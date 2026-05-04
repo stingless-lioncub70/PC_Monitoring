@@ -1,3 +1,6 @@
+<img width="1901" height="838" alt="image" src="https://github.com/user-attachments/assets/7f74b7f0-6e56-4a31-a01f-9d97627073fc" />
+
+
 # PC Monitor
 
 A lightweight, real-time Windows hardware monitor. Live CPU, GPU, RAM, and disk telemetry in a single dashboard — built for clarity and cross-vendor compatibility, not Christmas-tree dashboards full of numbers nobody reads.
